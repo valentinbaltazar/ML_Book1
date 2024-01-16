@@ -1,6 +1,7 @@
 #See Fig 2.1
 
 # from gettext import npgettext
+from statistics import mean
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -43,6 +44,8 @@ for set_ in (strat_train_set, strat_test_set):
     set_.drop("income_cat",axis=1,inplace=True)
 
 housing = strat_train_set.copy()
+housing_labels = strat_train_set["median_house_value"].copy()
+
 housing.plot(kind='scatter',x='longitude',y='latitude',alpha=0.4,
 s=housing["population"]/100,label="population",figsize=(10,7),
 c="median_house_value",cmap=plt.get_cmap("jet"),colorbar=True)
@@ -57,6 +60,12 @@ from pandas.plotting import scatter_matrix
 attributes = ['median_house_value','median_income','total_rooms','housing_median_age']
 scatter_matrix(housing[attributes],figsize=(12,8))
 # plt.show()
+
+
+housing = strat_train_set.drop("median_house_value",axis=1)
+housing_labels = strat_train_set["median_house_value"].copy()
+
+
 
 #custom transformers
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -75,7 +84,9 @@ class CombinedAttributesAdder(BaseEstimator,TransformerMixin):
             bedrooms_per_room = X[:,bedrooms_ix]/X[:,rooms_ix]
             return np.c_[X,rooms_per_household,population_per_household,bedrooms_per_room]
 
+
 from sklearn.impute import SimpleImputer
+
 
 #custom transform class
 from sklearn.pipeline import Pipeline
@@ -87,6 +98,8 @@ num_pipeline = Pipeline([
     ('std_scaler',StandardScaler())
 ])
 
+
+
 from sklearn.compose import ColumnTransformer
 housing_num = housing.drop("ocean_proximity",axis=1)
 num_attribs = list(housing_num)
@@ -97,4 +110,36 @@ full_pipeline = ColumnTransformer([
     ("cat",OneHotEncoder(),cat_attribs)
 ])
 
+
 housing_prepared = full_pipeline.fit_transform(housing)
+
+from sklearn.linear_model import LinearRegression
+
+lin_reg = LinearRegression()
+lin_reg.fit(housing_prepared,housing_labels)
+
+from sklearn.metrics import mean_squared_error
+
+housing_predictions = lin_reg.predict(housing_prepared)
+lin_mse = mean_squared_error(housing_labels, housing_predictions)
+lin_rmse = np.sqrt(lin_mse)
+print(lin_rmse)
+
+#DecisionTree & Cross Validation
+
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import cross_val_score
+
+tree_reg = DecisionTreeRegressor()
+
+scores = cross_val_score(tree_reg, housing_prepared, housing_labels,
+    scoring="neg_mean_squared_error",cv=10)
+
+tree_rmse_scores = np.sqrt(-scores)
+
+def display_scores(scores):
+    print("scores:",scores)
+    print("Mean:",scores.mean())
+    print("Standard Deviation:",scores.std())
+
+display_scores(tree_rmse_scores)
